@@ -5,13 +5,14 @@ export const sendEmail = async (to, subject, htmlContent) => {
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
-                user: 'giap100404@gmail.com', // <--- Thay Email Gmail của bạn
-                pass: 'wfrc flvz ieme cjbf'            // <--- Thay Mật khẩu ứng dụng 16 ký tự
+                // SỬA 2 DÒNG NÀY:
+                user: process.env.MAIL_USER,
+                pass: process.env.MAIL_PASSWORD
             }
         });
 
         const mailOptions = {
-            from: '"Rạp Chiếu Phim CineBook" <giap100404@gmail.com>', // <--- Thay Email của bạn
+            from: `"Rạp Chiếu Phim CineBook" <${process.env.MAIL_USER}>`, // Sửa luôn dòng này cho chuyên nghiệp
             to: to,
             subject: subject,
             html: htmlContent
