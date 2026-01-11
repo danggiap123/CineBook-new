@@ -124,55 +124,56 @@ export const createPayment = async (req, res) => {
 export const paymentCallback = async (req, res) => {
     let result = {};
     try {
+        console.log("🔥 [CALLBACK START] ZaloPay đang gọi...");
+
         let dataStr = req.body.data;
         let reqMac = req.body.mac;
 
+        // 1. Kiểm tra MAC
         let mac = CryptoJS.HmacSHA256(dataStr, config.key2).toString();
+        console.log(`🔍 [MAC CHECK] ReqMac: ${reqMac} | MyMac: ${mac}`);
 
         if (reqMac !== mac) {
+            console.error("❌ [ERROR] MAC không khớp! Kiểm tra lại Key2.");
             result.return_code = -1;
             result.return_message = "mac not equal";
         } else {
-            // Thanh toán thành công
+            console.log("✅ [MAC PASS] Chữ ký hợp lệ.");
+
+            // 2. Parse dữ liệu
             let dataJson = JSON.parse(dataStr);
             const embedData = JSON.parse(dataJson.embed_data);
             const bookingId = embedData.bookingId;
+            console.log(`📦 [BOOKING ID] Tìm đơn hàng: ${bookingId}`);
 
-            // Cập nhật trạng thái đã thanh toán
+            // 3. Cập nhật Database
             const updatedBooking = await Booking.findByIdAndUpdate(bookingId, { isPaid: true }, { new: true });
 
-            if (updatedBooking) {
-                console.log(`✅ Đã thanh toán thành công đơn hàng: ${bookingId}`);
+            if (!updatedBooking) {
+                console.error("❌ [DB ERROR] Không tìm thấy đơn hàng hoặc Update thất bại.");
+            } else {
+                console.log("✅ [DB SUCCESS] Đã update isPaid = true");
 
-                // --- GỬI EMAIL ---
-                const subject = "🎟️ Vé xem phim của bạn đã thanh toán thành công!";
-                const htmlContent = `
-                    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 600px;">
-                        <h2 style="color: #e50914;">CineBook - Xác nhận đặt vé</h2>
-                        <p>Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.</p>
-                        <hr>
-                        <h3>Thông tin vé:</h3>
-                        <ul>
-                            <li><b>Mã đặt chỗ:</b> ${updatedBooking._id}</li>
-                            <li><b>Ghế:</b> ${updatedBooking.bookedSeats.join(', ')}</li>
-                            <li><b>Tổng tiền:</b> ${updatedBooking.amount.toLocaleString('vi-VN')} đ</li>
-                            <li><b>Trạng thái:</b> Đã thanh toán</li>
-                        </ul>
-                        <p>Vui lòng đưa mã này cho nhân viên khi đến rạp.</p>
-                    </div>
-                `;
+                // 4. Gửi Email
+                try {
+                    console.log("📧 [EMAIL] Đang thử gửi mail...");
+                    const subject = "🎟️ Vé xem phim của bạn đã thanh toán thành công!";
+                    const htmlContent = `<p>Vé của bạn (Mã: ${updatedBooking._id}) đã được thanh toán.</p>`;
 
-                // Gọi hàm gửi mail (lấy email từ booking vừa lưu)
-                await sendEmail(updatedBooking.email, subject, htmlContent);
+                    await sendEmail(updatedBooking.email, subject, htmlContent);
+                    console.log("✅ [EMAIL SUCCESS] Đã gửi mail xong.");
+                } catch (emailErr) {
+                    console.error("⚠️ [EMAIL ERROR] Lỗi gửi mail (nhưng tiền đã trừ):", emailErr.message);
+                }
             }
 
             result.return_code = 1;
             result.return_message = "success";
         }
     } catch (ex) {
+        console.error("🔥 [FATAL ERROR] Server sập tại callback:", ex.message);
         result.return_code = 0;
         result.return_message = ex.message;
-        console.log("Callback Error:", ex.message);
     }
 
     res.json(result);

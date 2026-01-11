@@ -5,14 +5,14 @@ export const sendEmail = async (to, subject, htmlContent) => {
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
-                // SỬA 2 DÒNG NÀY:
+                // Tự động lấy từ Vercel Env
                 user: process.env.MAIL_USER,
                 pass: process.env.MAIL_PASSWORD
             }
         });
 
         const mailOptions = {
-            from: `"Rạp Chiếu Phim CineBook" <${process.env.MAIL_USER}>`, // Sửa luôn dòng này cho chuyên nghiệp
+            from: `"CineBook Ticket" <${process.env.MAIL_USER}>`,
             to: to,
             subject: subject,
             html: htmlContent
@@ -22,5 +22,7 @@ export const sendEmail = async (to, subject, htmlContent) => {
         console.log('✅ Email sent successfully to:', to);
     } catch (error) {
         console.error('❌ Error sending email:', error);
+        // Ném lỗi ra để Controller bắt được
+        throw error;
     }
 };
