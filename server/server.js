@@ -16,7 +16,13 @@ await connectDB()
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: [
+        "http://localhost:5173", // Giữ lại để mình test ở máy mình
+        "https://cinebook-client.vercel.app" // <--- THÊM LINK MỚI VÀO ĐÂY
+    ],
+    credentials: true
+}));
 app.use(clerkMiddleware())
 //API routes
 app.get('/', (req, res) => res.send('Server is Live'))

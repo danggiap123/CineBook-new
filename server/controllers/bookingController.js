@@ -90,7 +90,7 @@ export const createPayment = async (req, res) => {
 
         const embed_data = {
             // Khi thanh toán xong client quay về trang này
-            redirecturl: "http://localhost:5173/my-bookings",
+            redirecturl: "https://cinebook-client.vercel.app/my-bookings",
             bookingId: booking._id
         };
 
