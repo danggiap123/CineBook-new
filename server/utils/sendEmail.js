@@ -5,7 +5,7 @@ export const sendEmail = async (to, subject, htmlContent) => {
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
-                // Tự động lấy từ Vercel Env
+                // Lấy từ biến môi trường Vercel/Local
                 user: process.env.MAIL_USER,
                 pass: process.env.MAIL_PASSWORD
             }
@@ -22,7 +22,5 @@ export const sendEmail = async (to, subject, htmlContent) => {
         console.log('✅ Email sent successfully to:', to);
     } catch (error) {
         console.error('❌ Error sending email:', error);
-        // Ném lỗi ra để Controller bắt được
-        throw error;
     }
 };

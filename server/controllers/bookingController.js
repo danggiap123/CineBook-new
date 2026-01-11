@@ -3,13 +3,14 @@ import CryptoJS from 'crypto-js';
 import moment from 'moment';
 import Booking from "../models/Booking.js";
 import Show from "../models/Show.js";
-import { sendEmail } from '../utils/sendEmail.js'; // <--- Import hàm gửi mail
+import { sendEmail } from '../utils/sendEmail.js';
 
-// --- CẤU HÌNH ZALOPAY (TEST MODE) ---
+// --- CẤU HÌNH ZALOPAY (TEST MODE - APP 2553) ---
+// Dùng cứng ở đây để đảm bảo không bị lỗi sai biến môi trường
 const config = {
     app_id: "2553",
     key1: "PcY4iZIKFCIdgZvA6ueMcMHHUbRLYjPL",
-    key2: "kbtT07EWz2e4l8XG6vC6ZqT2r2sWj4",
+    key2: "kbtT07EWz2e4l8XG6vC6ZqT2r2sWj4", // <--- Key quan trọng nhất để check MAC
     endpoint: "https://sb-openapi.zalopay.vn/v2/create"
 };
 
@@ -26,11 +27,9 @@ const checkSeatsAvailability = async (showId, selectedSeats) => {
     }
 }
 
-// --- 1. SỬA HÀM TẠO BOOKING (Lưu thêm Email) ---
 export const createBooking = async (req, res) => {
     try {
         const userId = req.auth().userId;
-        // Lấy thêm email từ frontend gửi lên
         const { showId, selectedSeats, email } = req.body;
 
         if (!email) {
@@ -47,7 +46,7 @@ export const createBooking = async (req, res) => {
 
         const newBooking = await Booking.create({
             user: userId,
-            email: email, // <--- Lưu email vào đây
+            email: email,
             show: showId,
             amount: showData.showPrice * selectedSeats.length,
             bookedSeats: selectedSeats,
@@ -77,7 +76,7 @@ export const getOccupiedSeats = async (req, res) => {
     }
 }
 
-// --- 2. API TẠO THANH TOÁN (Giữ nguyên, chỉ sửa callback url nếu cần) ---
+// --- API TẠO THANH TOÁN ---
 export const createPayment = async (req, res) => {
     try {
         const { bookingId } = req.body;
@@ -88,6 +87,7 @@ export const createPayment = async (req, res) => {
         const app_trans_id = `${moment().format('YYMMDD')}_${transID}`;
 
         const embed_data = {
+            // Khi thanh toán xong client sẽ quay về trang này
             redirecturl: "http://localhost:5173/my-bookings",
             bookingId: booking._id
         };
@@ -103,7 +103,7 @@ export const createPayment = async (req, res) => {
             amount: booking.amount,
             description: `Thanh toan ve phim #${bookingId}`,
             bank_code: "",
-            // LƯU Ý: Khi deploy lên mạng thì thay link này bằng link thật
+            // LINK VERCEL CỦA BẠN (Đã điền sẵn)
             callback_url: "https://cinebook-server-sandy.vercel.app/api/booking/callback"
         };
 
@@ -120,58 +120,45 @@ export const createPayment = async (req, res) => {
     }
 }
 
-// --- 3. CALLBACK (Xử lý gửi mail khi thanh toán thành công) ---
+// --- API CALLBACK (XỬ LÝ KẾT QUẢ) ---
 export const paymentCallback = async (req, res) => {
     let result = {};
     try {
-        console.log("🔥 [CALLBACK START] ZaloPay đang gọi...");
-
         let dataStr = req.body.data;
         let reqMac = req.body.mac;
 
-        // 1. Kiểm tra MAC
+        // Dùng config.key2 đã khai báo cứng ở trên -> Chắc chắn đúng
         let mac = CryptoJS.HmacSHA256(dataStr, config.key2).toString();
-        console.log(`🔍 [MAC CHECK] ReqMac: ${reqMac} | MyMac: ${mac}`);
 
         if (reqMac !== mac) {
-            console.error("❌ [ERROR] MAC không khớp! Kiểm tra lại Key2.");
+            console.error("❌ MAC không khớp! ZaloPay gửi: " + reqMac + " | Server tính: " + mac);
             result.return_code = -1;
             result.return_message = "mac not equal";
         } else {
-            console.log("✅ [MAC PASS] Chữ ký hợp lệ.");
-
-            // 2. Parse dữ liệu
+            console.log("✅ MAC hợp lệ. Tiến hành update DB...");
             let dataJson = JSON.parse(dataStr);
             const embedData = JSON.parse(dataJson.embed_data);
             const bookingId = embedData.bookingId;
-            console.log(`📦 [BOOKING ID] Tìm đơn hàng: ${bookingId}`);
 
-            // 3. Cập nhật Database
             const updatedBooking = await Booking.findByIdAndUpdate(bookingId, { isPaid: true }, { new: true });
 
-            if (!updatedBooking) {
-                console.error("❌ [DB ERROR] Không tìm thấy đơn hàng hoặc Update thất bại.");
-            } else {
-                console.log("✅ [DB SUCCESS] Đã update isPaid = true");
-
-                // 4. Gửi Email
-                try {
-                    console.log("📧 [EMAIL] Đang thử gửi mail...");
-                    const subject = "🎟️ Vé xem phim của bạn đã thanh toán thành công!";
-                    const htmlContent = `<p>Vé của bạn (Mã: ${updatedBooking._id}) đã được thanh toán.</p>`;
-
-                    await sendEmail(updatedBooking.email, subject, htmlContent);
-                    console.log("✅ [EMAIL SUCCESS] Đã gửi mail xong.");
-                } catch (emailErr) {
-                    console.error("⚠️ [EMAIL ERROR] Lỗi gửi mail (nhưng tiền đã trừ):", emailErr.message);
-                }
+            if (updatedBooking) {
+                // Gửi email
+                const subject = "🎟️ Vé xem phim của bạn đã thanh toán thành công!";
+                const htmlContent = `
+                    <h1>Thanh toán thành công!</h1>
+                    <p>Mã vé: <b>${updatedBooking._id}</b></p>
+                    <p>Số tiền: ${updatedBooking.amount}</p>
+                    <p>Cảm ơn bạn đã đặt vé tại CineBook.</p>
+                `;
+                await sendEmail(updatedBooking.email, subject, htmlContent);
             }
 
             result.return_code = 1;
             result.return_message = "success";
         }
     } catch (ex) {
-        console.error("🔥 [FATAL ERROR] Server sập tại callback:", ex.message);
+        console.error("Lỗi Callback:", ex.message);
         result.return_code = 0;
         result.return_message = ex.message;
     }
