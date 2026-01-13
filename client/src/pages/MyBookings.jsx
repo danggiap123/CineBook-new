@@ -5,7 +5,7 @@ import timeFormat from '../lib/timeFormat'
 import { dateFormat } from '../lib/dateFormat'
 import { moneyFormat } from '../lib/moneyFormat'
 import { useAppContext } from '../context/AppContext'
-import { toast } from 'react-toastify' // Nhớ import toast để thông báo lỗi
+import { toast } from 'react-toastify'
 
 const MyBookings = () => {
 
@@ -29,7 +29,7 @@ const MyBookings = () => {
         setIsLoading(false)
     }
 
-    // --- HÀM MỚI: XỬ LÝ THANH TOÁN ---
+    // Hàm xử lý thanh toán
     const handlePayment = async (bookingId) => {
         try {
             toast.info("Đang tạo cổng thanh toán...")
@@ -39,7 +39,6 @@ const MyBookings = () => {
             );
 
             if (data.success) {
-                // Nếu thành công -> Chuyển hướng sang trang ZaloPay
                 window.location.href = data.paymentUrl;
             } else {
                 toast.error(data.message);
@@ -76,20 +75,21 @@ const MyBookings = () => {
                     </div>
                     <div className='flex flex-col md:items-end md:text-right justify-between p-4'>
                         <div className='flex items-center gap-4'>
-                            <p className='text-xl font-semibold mb-3'>{moneyFormat(item.amount)}</p>
+                            <p className='text-xl font-semibold mb-3 whitespace-nowrap'>{moneyFormat(item.amount)}</p>
 
-                            {/* Logic hiển thị nút thanh toán */}
+                            {/* --- ĐÃ SỬA Ở ĐÂY --- */}
                             {!item.isPaid ? (
                                 <button
-                                    onClick={() => handlePayment(item._id)} // Gọi hàm thanh toán khi click
-                                    className='bg-primary px-6 py-1.5 mb-3 text-sm rounded-full font-medium cursor-pointer hover:bg-red-600 transition-all'>
+                                    onClick={() => handlePayment(item._id)}
+                                    className='bg-primary px-6 py-1.5 mb-3 text-sm rounded-full font-medium cursor-pointer hover:bg-red-600 transition-all whitespace-nowrap flex-shrink-0'>
                                     Thanh toán ngay
                                 </button>
                             ) : (
-                                <span className='bg-green-600 text-white px-4 py-1.5 mb-3 text-sm rounded-full font-medium'>
+                                <span className='bg-green-600 text-white px-4 py-1.5 mb-3 text-sm rounded-full font-medium whitespace-nowrap flex-shrink-0'>
                                     Đã thanh toán
                                 </span>
                             )}
+                            {/* ------------------- */}
 
                         </div>
                         <div className='text-sm'>
