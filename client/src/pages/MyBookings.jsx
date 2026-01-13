@@ -7,20 +7,88 @@ import { moneyFormat } from '../lib/moneyFormat'
 import { useAppContext } from '../context/AppContext'
 import { toast } from 'react-toastify'
 
+// --- COMPONENT CON: XỬ LÝ ĐẾM NGƯỢC VÀ NÚT THANH TOÁN ---
+const PaymentSection = ({ booking, handlePayment }) => {
+    // Thời gian hết hạn = Thời gian tạo vé (booking.date) + 5 phút
+    const expiryTime = new Date(booking.date).getTime() + 5 * 60 * 1000;
+
+    const calculateTimeLeft = () => {
+        const now = new Date().getTime();
+        const difference = expiryTime - now;
+        return difference > 0 ? difference : 0;
+    };
+
+    const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
+
+    useEffect(() => {
+        // Nếu đã thanh toán hoặc đã hủy từ trước thì không cần chạy đồng hồ
+        if (booking.isPaid || booking.status === 'Failed' || timeLeft === 0) return;
+
+        const timer = setInterval(() => {
+            const remaining = calculateTimeLeft();
+            setTimeLeft(remaining);
+            if (remaining <= 0) clearInterval(timer);
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [booking, timeLeft]);
+
+    // Format mili-giây sang MM:SS
+    const minutes = Math.floor((timeLeft / 1000 / 60) % 60);
+    const seconds = Math.floor((timeLeft / 1000) % 60);
+    const formattedTime = `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
+
+    // --- LOGIC HIỂN THỊ TRẠNG THÁI ---
+
+    // 1. Đã thanh toán
+    if (booking.isPaid || booking.status === 'Success') {
+        return (
+            <span className='bg-green-600 text-white px-4 py-1.5 mb-3 text-sm rounded-full font-medium whitespace-nowrap flex-shrink-0'>
+                Đã thanh toán
+            </span>
+        );
+    }
+
+    // 2. Hết giờ (Do đồng hồ về 0 hoặc trạng thái từ DB là Failed)
+    if (timeLeft <= 0 || booking.status === 'Failed') {
+        return (
+            <span className='bg-red-500 text-white px-4 py-1.5 mb-3 text-sm rounded-full font-medium whitespace-nowrap flex-shrink-0'>
+                Đã hủy (Hết hạn)
+            </span>
+        );
+    }
+
+    // 3. Vẫn còn hạn -> Hiện nút thanh toán kèm đồng hồ
+    return (
+        <div className='flex flex-col items-end'>
+            <span className='text-red-400 text-xs font-mono mb-1'>
+                Hết hạn sau: {formattedTime}
+            </span>
+            <button
+                onClick={() => handlePayment(booking._id)}
+                className='bg-primary px-6 py-1.5 mb-3 text-sm rounded-full font-medium cursor-pointer hover:bg-red-600 transition-all whitespace-nowrap flex-shrink-0'>
+                Thanh toán ngay
+            </button>
+        </div>
+    );
+};
+// ---------------------------------------------------------
+
 const MyBookings = () => {
 
     const { axios, getToken, user, image_base_url } = useAppContext()
     const [bookings, setBookings] = useState([])
     const [isLoading, setIsLoading] = useState(true)
 
-    // Hàm gọi API lấy danh sách vé
     const getMyBookings = async () => {
         try {
             const { data } = await axios.get('/api/user/bookings', {
                 headers: { Authorization: `Bearer ${await getToken()}` }
             })
             if (data.success) {
-                setBookings(data.bookings)
+                // Sắp xếp vé mới nhất lên đầu
+                const sortedBookings = data.bookings.sort((a, b) => new Date(b.date) - new Date(a.date));
+                setBookings(sortedBookings);
             }
         } catch (error) {
             console.log(error)
@@ -29,7 +97,6 @@ const MyBookings = () => {
         setIsLoading(false)
     }
 
-    // Hàm xử lý thanh toán
     const handlePayment = async (bookingId) => {
         try {
             toast.info("Đang tạo cổng thanh toán...")
@@ -42,6 +109,8 @@ const MyBookings = () => {
                 window.location.href = data.paymentUrl;
             } else {
                 toast.error(data.message);
+                // Nếu backend báo lỗi (ví dụ hết hạn), load lại trang để cập nhật trạng thái
+                getMyBookings();
             }
         } catch (error) {
             toast.error(error.message);
@@ -77,28 +146,8 @@ const MyBookings = () => {
                         <div className='flex items-center gap-4'>
                             <p className='text-xl font-semibold mb-3 whitespace-nowrap'>{moneyFormat(item.amount)}</p>
 
-                            {/* --- LOGIC HIỂN THỊ TRẠNG THÁI (ĐÃ SỬA) --- */}
-
-                            {/* Trường hợp 1: Đã thanh toán (Ưu tiên kiểm tra isPaid trước) */}
-                            {item.isPaid || item.status === 'Success' ? (
-                                <span className='bg-green-600 text-white px-4 py-1.5 mb-3 text-sm rounded-full font-medium whitespace-nowrap flex-shrink-0'>
-                                    Đã thanh toán
-                                </span>
-                            ) : item.status === 'Failed' ? (
-                                // Trường hợp 2: Đã bị hủy do hết giờ
-                                <span className='bg-red-500 text-white px-4 py-1.5 mb-3 text-sm rounded-full font-medium whitespace-nowrap flex-shrink-0'>
-                                    Đã hủy (Hết hạn)
-                                </span>
-                            ) : (
-                                // Trường hợp 3: Chưa thanh toán (Vẫn còn hạn)
-                                <button
-                                    onClick={() => handlePayment(item._id)}
-                                    className='bg-primary px-6 py-1.5 mb-3 text-sm rounded-full font-medium cursor-pointer hover:bg-red-600 transition-all whitespace-nowrap flex-shrink-0'>
-                                    Thanh toán ngay
-                                </button>
-                            )}
-
-                            {/* ------------------------------------------- */}
+                            {/* Sử dụng Component mới ở đây */}
+                            <PaymentSection booking={item} handlePayment={handlePayment} />
 
                         </div>
                         <div className='text-sm'>
