@@ -8,6 +8,15 @@ const bookingSchema = new mongoose.Schema({
     bookedSeats: { type: Array, required: true },
     isPaid: { type: Boolean, default: false },
     paymentLink: { type: String },
+
+    // --- BỔ SUNG TRƯỜNG STATUS ---
+    status: {
+        type: String,
+        enum: ['Pending', 'Success', 'Failed', 'Cancelled'],
+        default: 'Pending',
+        required: true
+    },
+
 }, { timestamps: true })
 
 const Booking = mongoose.model("Booking", bookingSchema);

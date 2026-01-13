@@ -4,10 +4,9 @@ import moment from 'moment';
 import Booking from "../models/Booking.js";
 import Show from "../models/Show.js";
 import { sendEmail } from '../utils/sendEmail.js';
-// --- THÊM DÒNG NÀY ---
 import { inngest } from '../inngest/index.js';
 
-// --- CẤU HÌNH ZALOPAY (Hardcode để tránh lỗi Env) ---
+// --- CẤU HÌNH ZALOPAY ---
 const config = {
     app_id: "2553",
     key1: "PcY4iZIKFCIdgZvA6ueMcMHHUbRLYjPL",
@@ -55,7 +54,8 @@ export const createBooking = async (req, res) => {
             amount: showData.showPrice * selectedSeats.length,
             bookedSeats: selectedSeats,
             date: new Date(),
-            status: 'Pending' // Đảm bảo có trạng thái ban đầu
+            status: 'Pending', // Đã khớp với Model
+            isPaid: false
         });
 
         // Cập nhật ghế đã đặt vào Show
@@ -63,8 +63,7 @@ export const createBooking = async (req, res) => {
             $push: { occupiedSeats: { $each: selectedSeats } }
         });
 
-        // --- GỬI SỰ KIỆN CHO INNGEST ĐỂ ĐẾM NGƯỢC 5 PHÚT ---
-        // (Đây là logic quan trọng mới thêm)
+        // --- GỬI SỰ KIỆN CHO INNGEST ---
         try {
             await inngest.send({
                 name: "booking/created",
@@ -76,7 +75,6 @@ export const createBooking = async (req, res) => {
         } catch (err) {
             console.error("Lỗi gửi Inngest:", err);
         }
-        // ---------------------------------------------------
 
         res.json({ success: true, message: 'Đặt vé thành công!', bookingId: newBooking._id });
     } catch (error) {
@@ -98,15 +96,18 @@ export const getOccupiedSeats = async (req, res) => {
     }
 }
 
-// --- API TẠO THANH TOÁN (GỬI SANG ZALOPAY) ---
+// --- API TẠO THANH TOÁN (ZALOPAY) ---
 export const createPayment = async (req, res) => {
     try {
         const { bookingId } = req.body;
         const booking = await Booking.findById(bookingId);
 
-        // Kiểm tra xem đơn hàng còn tồn tại hay đã bị Inngest hủy
         if (!booking) return res.json({ success: false, message: "Không tìm thấy đơn hàng" });
-        if (booking.status === 'Failed') return res.json({ success: false, message: "Đơn hàng đã hết hạn thanh toán!" });
+
+        // Kiểm tra nếu vé đã bị hủy hoặc thất bại
+        if (booking.status === 'Failed' || booking.status === 'Cancelled') {
+            return res.json({ success: false, message: "Đơn hàng đã hết hạn hoặc bị hủy!" });
+        }
 
         const transID = Math.floor(Math.random() * 1000000);
         const app_trans_id = `${moment().format('YYMMDD')}_${transID}`;
@@ -143,7 +144,7 @@ export const createPayment = async (req, res) => {
     }
 }
 
-// --- API CALLBACK (XỬ LÝ KẾT QUẢ TỪ ZALOPAY) ---
+// --- API CALLBACK (ZALOPAY) ---
 export const paymentCallback = async (req, res) => {
     let result = {};
     try {
@@ -154,7 +155,7 @@ export const paymentCallback = async (req, res) => {
         console.log("🔥 [CALLBACK] ZaloPay gọi về...");
 
         if (reqMac !== mac) {
-            console.warn("⚠️ CẢNH BÁO: MAC không khớp nhưng vẫn tiếp tục xử lý (Debug Mode)");
+            console.warn("⚠️ CẢNH BÁO: MAC không khớp");
         }
 
         let dataJson = JSON.parse(dataStr);
@@ -171,6 +172,7 @@ export const paymentCallback = async (req, res) => {
         } else {
             console.log("✅ DB Update thành công: isPaid = true");
 
+            // Gửi mail
             try {
                 const subject = "🎟️ Vé xem phim của bạn đã thanh toán thành công!";
                 const htmlContent = `
@@ -181,12 +183,9 @@ export const paymentCallback = async (req, res) => {
                         <p><strong>Mã vé:</strong> ${updatedBooking._id}</p>
                         <p><strong>Số tiền:</strong> ${updatedBooking.amount.toLocaleString()} đ</p>
                         <p><strong>Thời gian:</strong> ${moment().format('DD/MM/YYYY HH:mm')}</p>
-                        <p>Vui lòng đưa mã vé này cho nhân viên tại quầy.</p>
                     </div>
                 `;
-
                 await sendEmail(updatedBooking.email, subject, htmlContent);
-                console.log("📧 Email đã gửi.");
             } catch (emailErr) {
                 console.error("⚠️ Lỗi gửi mail:", emailErr.message);
             }
