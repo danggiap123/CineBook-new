@@ -77,19 +77,28 @@ const MyBookings = () => {
                         <div className='flex items-center gap-4'>
                             <p className='text-xl font-semibold mb-3 whitespace-nowrap'>{moneyFormat(item.amount)}</p>
 
-                            {/* --- ĐÃ SỬA Ở ĐÂY --- */}
-                            {!item.isPaid ? (
+                            {/* --- LOGIC HIỂN THỊ TRẠNG THÁI (ĐÃ SỬA) --- */}
+
+                            {/* Trường hợp 1: Đã thanh toán (Ưu tiên kiểm tra isPaid trước) */}
+                            {item.isPaid || item.status === 'Success' ? (
+                                <span className='bg-green-600 text-white px-4 py-1.5 mb-3 text-sm rounded-full font-medium whitespace-nowrap flex-shrink-0'>
+                                    Đã thanh toán
+                                </span>
+                            ) : item.status === 'Failed' ? (
+                                // Trường hợp 2: Đã bị hủy do hết giờ
+                                <span className='bg-red-500 text-white px-4 py-1.5 mb-3 text-sm rounded-full font-medium whitespace-nowrap flex-shrink-0'>
+                                    Đã hủy (Hết hạn)
+                                </span>
+                            ) : (
+                                // Trường hợp 3: Chưa thanh toán (Vẫn còn hạn)
                                 <button
                                     onClick={() => handlePayment(item._id)}
                                     className='bg-primary px-6 py-1.5 mb-3 text-sm rounded-full font-medium cursor-pointer hover:bg-red-600 transition-all whitespace-nowrap flex-shrink-0'>
                                     Thanh toán ngay
                                 </button>
-                            ) : (
-                                <span className='bg-green-600 text-white px-4 py-1.5 mb-3 text-sm rounded-full font-medium whitespace-nowrap flex-shrink-0'>
-                                    Đã thanh toán
-                                </span>
                             )}
-                            {/* ------------------- */}
+
+                            {/* ------------------------------------------- */}
 
                         </div>
                         <div className='text-sm'>
