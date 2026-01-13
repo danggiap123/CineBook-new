@@ -4,7 +4,7 @@ import moment from 'moment';
 import Booking from "../models/Booking.js";
 import Show from "../models/Show.js";
 import { sendEmail } from '../utils/sendEmail.js';
-
+import { inngest } from "../inngest/index.js";
 // --- CẤU HÌNH ZALOPAY (Hardcode để tránh lỗi Env) ---
 const config = {
     app_id: "2553",
