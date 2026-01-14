@@ -4,13 +4,22 @@ import { assets } from '../assets/assets'
 import { MenuIcon, SearchIcon, TicketPlus, XIcon } from 'lucide-react'
 import { useClerk, UserButton, useUser } from '@clerk/clerk-react'
 import { useAppContext } from '../context/AppContext'
+
 const Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
     const { user } = useUser();
     const { openSignIn } = useClerk();
 
     const navigate = useNavigate();
-    const { favoritesMovies } = useAppContext()
+    // Lấy thêm isAdmin từ Context để phân quyền
+    const { favoritesMovies, isAdmin } = useAppContext()
+
+    // Hàm tiện ích để đóng menu và cuộn lên đầu trang khi click
+    const handleLinkClick = () => {
+        scrollTo(0, 0);
+        setIsOpen(false);
+    }
+
     return (
         <div className='fixed top-0 left-0 z-50 w-full flex items-center
          justify-between px-6 md:px-16 lg:px-36 py-5'>
@@ -28,11 +37,30 @@ const Navbar = () => {
                 <XIcon className='md:hidden absolute top-6 right-6 w-6 h-6 
                 cursor-pointer' onClick={() => setIsOpen(!isOpen)} />
 
-                <Link onClick={() => { scrollTo(0, 0); setIsOpen(false); }} to='/'>Home</Link>
-                <Link onClick={() => { scrollTo(0, 0); setIsOpen(false); }} to='/movies'>Movies</Link>
-                <Link onClick={() => { scrollTo(0, 0); setIsOpen(false); }} to='/'>Theaters</Link>
-                <Link onClick={() => { scrollTo(0, 0); setIsOpen(false); }} to='/'>Releases</Link>
-                {favoritesMovies.length > 0 && <Link onClick={() => { scrollTo(0, 0); setIsOpen(false); }} to='/favorites'>Favorites</Link>}
+                {/* --- 3 MỤC CỐ ĐỊNH (Luôn hiện) --- */}
+                <Link onClick={handleLinkClick} to='/'>Home</Link>
+                <Link onClick={handleLinkClick} to='/movies'>Movies</Link>
+                <Link onClick={handleLinkClick} to='/'>Theaters</Link>
+
+                {/* --- LOGIC PHÂN QUYỀN (Chỉ hiện khi đã đăng nhập) --- */}
+                {user && (
+                    <>
+                        {/* Nếu là Admin -> Hiện Dashboard. Nếu là User thường -> Hiện Releases */}
+                        {isAdmin ? (
+                            <Link onClick={handleLinkClick} to='/admin' className='text-red-500 font-semibold'>
+                                Dashboard
+                            </Link>
+                        ) : (
+                            <Link onClick={handleLinkClick} to='/'>Releases</Link>
+                        )}
+
+                        {/* Mục Favorites (Chỉ hiện khi có phim yêu thích) */}
+                        {favoritesMovies.length > 0 && (
+                            <Link onClick={handleLinkClick} to='/favorites'>Favorites</Link>
+                        )}
+                    </>
+                )}
+
             </div>
 
             <div className='flex items-center gap-8'>
